@@ -3,131 +3,361 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NextGen Face Swap</title>
+    
+    <title>iShark Swap | Premium AI Face Swap</title>
+    <meta name="description" content="Seamlessly swap faces in photos using advanced AI. 100% free, private, and realistic.">
+    <meta property="og:title" content="iShark Swap | Premium AI Face Swap">
+    <meta property="og:description" content="Seamlessly swap faces in photos using advanced AI. Try it now for free.">
+    <meta property="og:url" content="https://ishark-swap.vercel.app">
+    <meta property="og:type" content="website">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/img-comparison-slider@8/dist/styles.css"/>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: { gray: { 800: '#1f2937', 900: '#111827' }, primary: '#8b5cf6' }
-                }
-            }
+            theme: { extend: { colors: { primary: '#8b5cf6' } } }
         }
     </script>
+    <style>
+        .drag-active { border-color: #8b5cf6 !important; background-color: rgba(139, 92, 246, 0.1) !important; }
+        /* Prevent scrollbars when modals are open */
+        body.modal-open { overflow: hidden; }
+        .gallery-img { transition: transform 0.3s; }
+        .gallery-img:hover { transform: scale(1.05); }
+    </style>
 </head>
-<body class="bg-gray-900 text-white font-sans antialiased min-h-screen flex flex-col items-center py-10">
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white font-sans antialiased min-h-screen flex flex-col items-center py-10 transition-colors duration-300">
 
-    <header class="text-center mb-12">
-        <h1 class="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600 mb-4">
-            Seamless Face Swap
+    <button onclick="toggleTheme()" class="absolute top-5 right-5 p-3 rounded-full bg-gray-200 dark:bg-gray-800 shadow-lg hover:scale-110 transition-transform">
+        <i id="theme-icon" class="fas fa-sun text-yellow-500 dark:text-yellow-300 text-xl"></i>
+    </button>
+
+    <header class="text-center mb-10 mt-8 px-4">
+        <h1 class="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-blue-500 mb-4 tracking-tight">
+            iShark Swap
         </h1>
-        <p class="text-gray-400 text-lg">Upload your media, select the faces, and let AI do the magic naturally.</p>
+        <p class="text-gray-600 dark:text-gray-400 text-lg max-w-xl mx-auto">Upload your media, select the exact face, and let our enhanced AI engine do the rest.</p>
     </header>
 
-    <main class="w-full max-w-4xl bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+    <main class="w-full max-w-5xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-10 border border-gray-200 dark:border-gray-700">
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div class="flex flex-col">
-                <label class="text-sm font-semibold text-gray-300 mb-2">1. Upload Source Image</label>
-                <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-purple-500 hover:text-purple-400 transition cursor-pointer bg-gray-900 uploader-box">
-                    <i class="fas fa-cloud-upload-alt text-4xl mb-2"></i>
-                    <span class="text-sm text-center px-4 file-label">Click to upload the base image</span>
-                    <input type="file" id="source-file" class="hidden file-input" accept="image/*">
+            <div class="flex flex-col relative" id="source-zone">
+                <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex justify-between">
+                    <span>1. Base Image</span>
+                    <span id="source-status" class="text-xs text-purple-500 hidden"><i class="fas fa-check-circle"></i> Detected</span>
+                </label>
+                <div class="drop-zone border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-xl h-56 flex flex-col items-center justify-center text-gray-500 hover:border-purple-500 transition cursor-pointer bg-gray-50 dark:bg-gray-900 overflow-hidden relative" onclick="document.getElementById('source-file').click()">
+                    <img id="source-preview" class="absolute inset-0 w-full h-full object-cover hidden opacity-50" />
+                    <div class="z-10 flex flex-col items-center">
+                        <i class="fas fa-image text-4xl mb-3"></i>
+                        <span class="text-sm text-center px-4 font-medium">Click or Drag Image Here</span>
+                        <span class="text-xs mt-1 opacity-70">The photo containing the body</span>
+                    </div>
+                    <input type="file" id="source-file" class="hidden" accept="image/*">
+                </div>
+                <div id="face-selector" class="mt-4 hidden">
+                    <p class="text-xs text-center mb-2 font-semibold">Select the face to replace:</p>
+                    <div id="face-thumbnails" class="flex justify-center gap-2 overflow-x-auto pb-2"></div>
                 </div>
             </div>
 
-            <div class="flex flex-col">
-                <label class="text-sm font-semibold text-gray-300 mb-2">2. Upload Target Face</label>
-                <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-pink-500 hover:text-pink-400 transition cursor-pointer bg-gray-900 uploader-box">
-                    <i class="fas fa-user-circle text-4xl mb-2"></i>
-                    <span class="text-sm text-center px-4 file-label">Upload the new face you want to use</span>
-                    <input type="file" id="target-file" class="hidden file-input" accept="image/*">
+            <div class="flex flex-col" id="target-zone">
+                <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex justify-between">
+                    <span>2. The New Face</span>
+                    <span id="target-status" class="text-xs text-blue-500 hidden"><i class="fas fa-check-circle"></i> Cropped</span>
+                </label>
+                <div class="drop-zone border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-xl h-56 flex flex-col items-center justify-center text-gray-500 hover:border-blue-500 transition cursor-pointer bg-gray-50 dark:bg-gray-900 overflow-hidden relative" onclick="document.getElementById('target-file').click()">
+                    <img id="target-preview" class="absolute inset-0 w-full h-full object-cover hidden opacity-50" />
+                    <div class="z-10 flex flex-col items-center">
+                        <i class="fas fa-user-astronaut text-4xl mb-3"></i>
+                        <span class="text-sm text-center px-4 font-medium">Click or Drag Face Here</span>
+                        <span class="text-xs mt-1 opacity-70">The face you want to use</span>
+                    </div>
+                    <input type="file" id="target-file" class="hidden" accept="image/*">
                 </div>
             </div>
         </div>
 
-        <div class="mt-8 flex justify-center">
-            <button id="swap-btn" onclick="startSwap()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-10 rounded-full shadow-lg transform hover:scale-105 transition-all text-lg flex items-center">
-                <i class="fas fa-magic mr-2"></i> Swap Face Now
+        <div class="mt-10 flex flex-col items-center">
+            <button id="swap-btn" onclick="executeSwap()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-4 px-12 rounded-full shadow-lg transform hover:scale-105 transition-all text-lg flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-bolt mr-2"></i> Ignite AI Swap
             </button>
+            <p id="loading-text" class="text-purple-500 mt-4 font-medium animate-pulse hidden">Processing via Neural Engine (~10s)...</p>
         </div>
 
-        <div id="loading-section" class="mt-8 hidden flex flex-col items-center">
+        <div id="result-section" class="mt-12 hidden flex-col items-center w-full">
+            <h3 class="text-2xl font-bold mb-6">Result Analysis</h3>
+            <div class="w-full max-w-2xl rounded-xl overflow-hidden shadow-2xl border-4 border-gray-700">
+                <img-comparison-slider class="w-full focus:outline-none">
+                    <img slot="first" id="slider-before" width="100%" class="object-cover" />
+                    <img slot="second" id="slider-after" width="100%" class="object-cover" />
+                </img-comparison-slider>
             </div>
-
+            <a id="download-btn" class="mt-6 bg-gray-800 text-white hover:bg-gray-700 font-bold py-3 px-8 rounded-full shadow-md transition-all flex items-center cursor-pointer">
+                <i class="fas fa-download mr-2"></i> Save Masterpiece
+            </a>
+        </div>
     </main>
 
+    <div class="w-full max-w-5xl mt-12 px-4">
+        <h3 class="text-xl font-bold text-gray-700 dark:text-gray-300 mb-4 border-b border-gray-300 dark:border-gray-700 pb-2"><i class="fas fa-history mr-2"></i> Recent Swaps</h3>
+        <div id="gallery-container" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <p class="text-gray-500 text-sm col-span-full">Your recent creations will appear here (saved locally).</p>
+        </div>
+    </div>
+
+    <div id="cropper-modal" class="fixed inset-0 bg-black bg-opacity-90 z-50 hidden flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
+            <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                <h3 class="font-bold text-lg dark:text-white">Crop Target Face</h3>
+                <button onclick="closeCropper()" class="text-gray-500 hover:text-red-500"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="h-80 w-full bg-black">
+                <img id="cropper-image" class="max-w-full block" />
+            </div>
+            <div class="p-4 flex justify-end gap-2">
+                <button onclick="saveCrop()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold transition">Confirm Crop</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/img-comparison-slider@8/dist/index.js"></script>
+
     <script>
-        // PERMANENT HUGGING FACE URL - No more Ngrok updates needed!
         const BACKEND_URL = "https://chadharsahib-face-swap-api.hf.space";
+        
+        let sourceFile = null;
+        let targetBlob = null; // The cropped result
+        let selectedFaceIndex = -1; // Which face to swap
+        let cropper = null;
 
-        const sourceInput = document.getElementById('source-file');
-        const targetInput = document.getElementById('target-file');
+        // --- 1. UI Helpers (Toasts & Theme) ---
+        function showToast(msg, type='success') {
+            Toastify({
+                text: msg,
+                duration: 3000,
+                gravity: "bottom", position: "right",
+                style: { background: type === 'error' ? "#ef4444" : "#10b981", borderRadius: "8px" }
+            }).showToast();
+        }
 
-        // Robust event listeners
-        document.querySelectorAll('.uploader-box').forEach((box) => {
-            const input = box.querySelector('.file-input');
-            const textSpan = box.querySelector('.file-label');
-            
-            box.addEventListener('click', () => input.click());
-            
-            input.addEventListener('change', () => {
-                if (input.files.length > 0) {
-                    textSpan.innerText = "Selected: " + input.files[0].name; 
-                    textSpan.classList.add('text-green-400');
-                    textSpan.classList.remove('text-gray-400');
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            const icon = document.getElementById('theme-icon');
+            if(document.documentElement.classList.contains('dark')) {
+                icon.classList.remove('fa-moon', 'text-gray-600');
+                icon.classList.add('fa-sun', 'text-yellow-300');
+            } else {
+                icon.classList.remove('fa-sun', 'text-yellow-300');
+                icon.classList.add('fa-moon', 'text-gray-600');
+            }
+        }
+
+        // --- 2. Drag and Drop Logic ---
+        document.querySelectorAll('.drop-zone').forEach(zone => {
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-active'); });
+            zone.addEventListener('dragleave', e => { e.preventDefault(); zone.classList.remove('drag-active'); });
+            zone.addEventListener('drop', e => {
+                e.preventDefault();
+                zone.classList.remove('drag-active');
+                const input = zone.querySelector('input[type="file"]');
+                if (e.dataTransfer.files.length) {
+                    input.files = e.dataTransfer.files;
+                    input.dispatchEvent(new Event('change'));
                 }
             });
         });
 
-        async function startSwap() {
-            if (!sourceInput.files[0] || !targetInput.files[0]) {
-                alert("Please upload both a Source Image and a Target Face!");
-                return;
-            }
-
-            const btn = document.getElementById('swap-btn');
-            const loading = document.getElementById('loading-section');
+        // --- 3. Source Upload & Face Detection ---
+        document.getElementById('source-file').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            sourceFile = file;
             
-            btn.classList.add('hidden');
-            loading.classList.remove('hidden');
-            // Updated text to reflect CPU processing time
-            loading.innerHTML = `<div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div><p class="text-purple-400 animate-pulse">AI is mapping facial nodes (This takes ~10 seconds on free tier)...</p>`;
+            // Show preview
+            const preview = document.getElementById('source-preview');
+            preview.src = URL.createObjectURL(file);
+            preview.classList.remove('hidden');
 
+            // Detect faces immediately
+            showToast("Analyzing photo for faces...", "success");
             const formData = new FormData();
-            formData.append("source_media", sourceInput.files[0]);
-            formData.append("target_image", targetInput.files[0]);
+            formData.append("source_image", file);
 
             try {
-                // Fetch call cleanly routes to Hugging Face without Ngrok headers
-                const response = await fetch(`${BACKEND_URL}/swap/`, {
-                    method: 'POST',
-                    body: formData
-                });
+                const res = await fetch(`${BACKEND_URL}/detect/`, { method: 'POST', body: formData });
+                if (!res.ok) throw new Error((await res.json()).detail || "Face detection failed");
+                const data = await res.json();
+                
+                renderFaceOptions(data.faces);
+                document.getElementById('source-status').classList.remove('hidden');
+                document.getElementById('slider-before').src = preview.src; // Prep slider
+            } catch (err) {
+                showToast(err.message, "error");
+            }
+        });
 
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || "Server failed to process images.");
+        function renderFaceOptions(faces) {
+            const container = document.getElementById('face-thumbnails');
+            container.innerHTML = '';
+            document.getElementById('face-selector').classList.remove('hidden');
+            
+            faces.forEach(face => {
+                const img = document.createElement('img');
+                img.src = face.thumbnail;
+                img.className = `w-16 h-16 rounded-full object-cover border-4 border-gray-400 cursor-pointer hover:border-purple-500 transition shadow-md`;
+                img.onclick = () => {
+                    document.querySelectorAll('#face-thumbnails img').forEach(i => i.classList.replace('border-purple-500', 'border-gray-400'));
+                    img.classList.replace('border-gray-400', 'border-purple-500');
+                    selectedFaceIndex = face.index;
+                };
+                container.appendChild(img);
+            });
+            
+            // Auto-select first face
+            if(faces.length > 0) container.children[0].click();
+        }
+
+        // --- 4. Target Upload & Cropper ---
+        document.getElementById('target-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('cropper-image').src = e.target.result;
+                document.getElementById('cropper-modal').classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                
+                if (cropper) cropper.destroy();
+                cropper = new Cropper(document.getElementById('cropper-image'), {
+                    aspectRatio: 1, // Force square for better face mapping
+                    viewMode: 2,
+                    background: false
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function closeCropper() {
+            document.getElementById('cropper-modal').classList.add('hidden');
+            document.body.classList.remove('modal-open');
+        }
+
+        function saveCrop() {
+            cropper.getCroppedCanvas({width: 512, height: 512}).toBlob((blob) => {
+                targetBlob = blob;
+                const previewUrl = URL.createObjectURL(blob);
+                
+                const preview = document.getElementById('target-preview');
+                preview.src = previewUrl;
+                preview.classList.remove('hidden');
+                document.getElementById('target-status').classList.remove('hidden');
+                
+                closeCropper();
+                showToast("Target face locked in!", "success");
+            }, 'image/jpeg', 0.9);
+        }
+
+        // --- 5. Swap Execution ---
+        async function executeSwap() {
+            if (!sourceFile) return showToast("Upload a base image first.", "error");
+            if (!targetBlob) return showToast("Upload and crop a target face first.", "error");
+            if (selectedFaceIndex === -1) return showToast("Select a face to replace.", "error");
+
+            const btn = document.getElementById('swap-btn');
+            const loadText = document.getElementById('loading-text');
+            const resultSec = document.getElementById('result-section');
+            
+            btn.disabled = true;
+            loadText.classList.remove('hidden');
+            resultSec.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append("source_image", sourceFile);
+            formData.append("target_image", targetBlob, "target.jpg");
+            formData.append("face_index", selectedFaceIndex);
+
+            try {
+                const res = await fetch(`${BACKEND_URL}/swap/`, { method: 'POST', body: formData });
+                if (!res.ok) {
+                    if (res.status === 429) throw new Error("Whoa! Rate limit hit. Wait a minute.");
+                    throw new Error((await res.json()).detail || "Swap failed");
                 }
 
-                const imageBlob = await response.blob();
-                const imageUrl = URL.createObjectURL(imageBlob);
-
-                loading.innerHTML = `
-                    <div class="text-green-400 text-xl font-bold mb-4"><i class="fas fa-check-circle"></i> Swap Complete!</div>
-                    <img src="${imageUrl}" class="rounded-xl max-w-full h-64 object-cover mb-4 shadow-lg border border-gray-600" />
-                    <a href="${imageUrl}" download="swapped_face.jpg" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-10 rounded-full shadow-lg transition-all text-lg flex items-center mt-4"><i class="fas fa-download mr-2"></i> Download Result</a>
-                    <button onclick="location.reload()" class="mt-4 text-gray-400 underline hover:text-white">Do another swap</button>
-                `;
-            } catch (error) {
-                loading.innerHTML = `
-                    <div class="text-red-500 text-xl font-bold mb-4"><i class="fas fa-exclamation-triangle"></i> Error Processing Swap</div>
-                    <p class="text-gray-300 mb-4">${error.message}</p>
-                    <button onclick="location.reload()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-full transition-all">Try Again</button>
-                `;
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                
+                // Show Result in Slider
+                document.getElementById('slider-after').src = url;
+                document.getElementById('download-btn').href = url;
+                document.getElementById('download-btn').download = `ishark_swap_${Date.now()}.jpg`;
+                resultSec.classList.remove('hidden');
+                resultSec.classList.add('flex');
+                
+                showToast("Masterpiece created!", "success");
+                saveToGallery(url);
+                
+            } catch (err) {
+                showToast(err.message, "error");
+            } finally {
+                btn.disabled = false;
+                loadText.classList.add('hidden');
             }
+        }
+
+        // --- 6. Local Storage Gallery ---
+        // Converts blob URL to compressed base64 for persistent free storage
+        function saveToGallery(blobUrl) {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                // Downscale for local storage limit (Max 5MB)
+                const MAX_WIDTH = 400;
+                const scale = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scale;
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                const base64 = canvas.toDataURL('image/jpeg', 0.6);
+                let history = JSON.parse(localStorage.getItem('isharkHistory') || '[]');
+                history.unshift(base64); // Add to beginning
+                if (history.length > 4) history.pop(); // Keep only last 4
+                localStorage.setItem('isharkHistory', JSON.stringify(history));
+                loadGallery();
+            };
+            img.src = blobUrl;
+        }
+
+        function loadGallery() {
+            const history = JSON.parse(localStorage.getItem('isharkHistory') || '[]');
+            const container = document.getElementById('gallery-container');
+            if (history.length === 0) return;
+            
+            container.innerHTML = '';
+            history.forEach(b64 => {
+                const a = document.createElement('a');
+                a.href = b64;
+                a.download = "ishark_history.jpg";
+                a.className = "rounded-xl overflow-hidden shadow-md border border-gray-300 dark:border-gray-700 block";
+                a.innerHTML = `<img src="${b64}" class="w-full h-32 object-cover gallery-img" title="Click to download" />`;
+                container.appendChild(a);
+            });
+        }
+
+        // Initialize
+        loadGallery();
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            // Dark is default via HTML class, no action needed unless we want to sync icon
         }
     </script>
 </body>
