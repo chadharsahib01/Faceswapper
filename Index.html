@@ -115,6 +115,9 @@
                 // Send to Python Backend
                 const response = await fetch(`${BACKEND_URL}/swap/`, {
                     method: 'POST',
+                    headers: {
+                        "ngrok-skip-browser-warning": "true" // 🟢 Bypasses Ngrok's free tier warning page
+                    },
                     body: formData
                 });
 
