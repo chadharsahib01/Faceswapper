@@ -34,11 +34,11 @@
             
             <!-- Step 1: Source Video/Image -->
             <div class="flex flex-col">
-                <label class="text-sm font-semibold text-gray-300 mb-2">1. Upload Source (Image or Video)</label>
+                <label class="text-sm font-semibold text-gray-300 mb-2">1. Upload Source Image</label>
                 <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-purple-500 hover:text-purple-400 transition cursor-pointer bg-gray-900">
                     <i class="fas fa-cloud-upload-alt text-4xl mb-2"></i>
-                    <span class="text-sm">Drag & drop or click to browse</span>
-                    <input type="file" id="source-file" class="hidden" accept="image/*,video/*" onchange="simulateDetection()">
+                    <span class="text-sm text-center px-4">Click to upload the base image</span>
+                    <input type="file" id="source-file" class="hidden" accept="image/*">
                 </div>
             </div>
 
@@ -47,24 +47,8 @@
                 <label class="text-sm font-semibold text-gray-300 mb-2">2. Upload Target Face</label>
                 <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-pink-500 hover:text-pink-400 transition cursor-pointer bg-gray-900">
                     <i class="fas fa-user-circle text-4xl mb-2"></i>
-                    <span class="text-sm">Upload the face you want to use</span>
+                    <span class="text-sm text-center px-4">Upload the new face you want to use</span>
                     <input type="file" class="hidden" accept="image/*">
-                </div>
-            </div>
-        </div>
-
-        <!-- Step 3: Face Detection & Selection (Hidden until upload) -->
-        <div id="detection-section" class="mt-8 hidden">
-            <h3 class="text-lg font-semibold text-white border-b border-gray-700 pb-2 mb-4">3. Select Face to Replace</h3>
-            <p class="text-sm text-gray-400 mb-4">We detected multiple faces in your video. Click the one you want to swap.</p>
-            <div class="flex space-x-4 overflow-x-auto pb-2">
-                <!-- Mock Detected Faces -->
-                <div class="w-20 h-20 rounded-full border-4 border-transparent hover:border-purple-500 cursor-pointer overflow-hidden relative group">
-                    <img src="https://i.pravatar.cc/150?img=11" alt="Face 1" class="w-full h-full object-cover">
-                </div>
-                <div class="w-20 h-20 rounded-full border-4 border-purple-500 cursor-pointer overflow-hidden relative group">
-                    <img src="https://i.pravatar.cc/150?img=12" alt="Face 2" class="w-full h-full object-cover">
-                    <div class="absolute inset-0 bg-purple-500 bg-opacity-30 flex items-center justify-center"><i class="fas fa-check text-white"></i></div>
                 </div>
             </div>
         </div>
@@ -79,41 +63,78 @@
         <!-- Loading / Result State -->
         <div id="loading-section" class="mt-8 hidden flex flex-col items-center">
             <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div>
-            <p class="text-purple-400 animate-pulse">Rendering natural swap... This may take a moment for videos.</p>
+            <p class="text-purple-400 animate-pulse">AI is swapping the face... Please wait.</p>
         </div>
 
     </main>
 
     <script>
-        // Make file upload boxes clickable
-        document.querySelectorAll('.border-dashed').forEach(box => {
-            box.addEventListener('click', () => box.querySelector('input').click());
+        // 🟢 YOUR NGROK URL IS PLACED HERE:
+        const BACKEND_URL = "https://44af-34-182-77-151.ngrok-free.app";
+
+        const sourceInput = document.getElementById('source-file');
+        const targetInput = document.querySelectorAll('input[type="file"]')[1];
+
+        // Make file upload boxes clickable & show file name when selected
+        document.querySelectorAll('.border-dashed').forEach((box, index) => {
+            const input = box.querySelector('input');
+            const textSpan = box.querySelector('span');
+            
+            box.addEventListener('click', () => input.click());
+            
+            input.addEventListener('change', () => {
+                if (input.files.length > 0) {
+                    textSpan.innerText = "Selected: " + input.files[0].name; 
+                    textSpan.classList.add('text-green-400');
+                    textSpan.classList.remove('text-gray-400');
+                }
+            });
         });
 
-        // Simulate AI Face Detection after uploading source video
-        function simulateDetection() {
-            const btn = document.getElementById('swap-btn');
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Detecting Faces...';
-            btn.classList.add('opacity-50', 'cursor-not-allowed');
-            
-            setTimeout(() => {
-                document.getElementById('detection-section').classList.remove('hidden');
-                btn.innerHTML = '<i class="fas fa-magic mr-2"></i> Swap Face Now';
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            }, 1500); // Fake delay for scanning
-        }
+        // The Real Swapping Process
+        async function startSwap() {
+            if (!sourceInput.files[0] || !targetInput.files[0]) {
+                alert("Please upload both a Source Image and a Target Face!");
+                return;
+            }
 
-        // Simulate the Swapping Process
-        function startSwap() {
-            document.getElementById('swap-btn').classList.add('hidden');
-            document.getElementById('loading-section').classList.remove('hidden');
+            const btn = document.getElementById('swap-btn');
+            const loading = document.getElementById('loading-section');
             
-            setTimeout(() => {
-                document.getElementById('loading-section').innerHTML = `
+            // Show loading state
+            btn.classList.add('hidden');
+            loading.classList.remove('hidden');
+            loading.innerHTML = `<div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div><p class="text-purple-400 animate-pulse">AI is swapping the face... Please wait.</p>`;
+
+            // Prepare files to send to your Google Colab Backend
+            const formData = new FormData();
+            formData.append("source_media", sourceInput.files[0]);
+            formData.append("target_image", targetInput.files[0]);
+
+            try {
+                // Send to Python Backend
+                const response = await fetch(`${BACKEND_URL}/swap/`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("Swap failed. Make sure both images have clear faces.");
+
+                // Get result image back
+                const imageBlob = await response.blob();
+                const imageUrl = URL.createObjectURL(imageBlob);
+
+                // Show result on screen
+                loading.innerHTML = `
                     <div class="text-green-400 text-xl font-bold mb-4"><i class="fas fa-check-circle"></i> Swap Complete!</div>
-                    <button class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-6 rounded-lg shadow transition"><i class="fas fa-download mr-2"></i> Download Result</button>
+                    <img src="${imageUrl}" class="rounded-xl max-w-full h-64 object-cover mb-4 shadow-lg border border-gray-600" />
+                    <a href="${imageUrl}" download="swapped_face.jpg" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-10 rounded-full shadow-lg transition-all text-lg flex items-center mt-4"><i class="fas fa-download mr-2"></i> Download Result</a>
+                    <button onclick="location.reload()" class="mt-4 text-gray-400 underline hover:text-white">Do another swap</button>
                 `;
-            }, 3000);
+            } catch (error) {
+                loading.innerHTML = `<div class="text-red-500 text-xl font-bold mb-4"><i class="fas fa-times-circle"></i> Error: ${error.message}</div>
+                <button onclick="location.reload()" class="mt-4 text-gray-400 underline hover:text-white">Try Again</button>`;
+            }
         }
     </script>
 </body>
