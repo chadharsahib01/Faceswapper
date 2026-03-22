@@ -19,7 +19,6 @@
 </head>
 <body class="bg-gray-900 text-white font-sans antialiased min-h-screen flex flex-col items-center py-10">
 
-    <!-- Header -->
     <header class="text-center mb-12">
         <h1 class="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600 mb-4">
             Seamless Face Swap
@@ -27,58 +26,50 @@
         <p class="text-gray-400 text-lg">Upload your media, select the faces, and let AI do the magic naturally.</p>
     </header>
 
-    <!-- Main App Container -->
     <main class="w-full max-w-4xl bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            
-            <!-- Step 1: Source Video/Image -->
             <div class="flex flex-col">
                 <label class="text-sm font-semibold text-gray-300 mb-2">1. Upload Source Image</label>
-                <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-purple-500 hover:text-purple-400 transition cursor-pointer bg-gray-900">
+                <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-purple-500 hover:text-purple-400 transition cursor-pointer bg-gray-900 uploader-box">
                     <i class="fas fa-cloud-upload-alt text-4xl mb-2"></i>
-                    <span class="text-sm text-center px-4">Click to upload the base image</span>
-                    <input type="file" id="source-file" class="hidden" accept="image/*">
+                    <span class="text-sm text-center px-4 file-label">Click to upload the base image</span>
+                    <input type="file" id="source-file" class="hidden file-input" accept="image/*">
                 </div>
             </div>
 
-            <!-- Step 2: Target Face -->
             <div class="flex flex-col">
                 <label class="text-sm font-semibold text-gray-300 mb-2">2. Upload Target Face</label>
-                <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-pink-500 hover:text-pink-400 transition cursor-pointer bg-gray-900">
+                <div class="border-2 border-dashed border-gray-600 rounded-xl h-48 flex flex-col items-center justify-center text-gray-400 hover:border-pink-500 hover:text-pink-400 transition cursor-pointer bg-gray-900 uploader-box">
                     <i class="fas fa-user-circle text-4xl mb-2"></i>
-                    <span class="text-sm text-center px-4">Upload the new face you want to use</span>
-                    <input type="file" class="hidden" accept="image/*">
+                    <span class="text-sm text-center px-4 file-label">Upload the new face you want to use</span>
+                    <input type="file" id="target-file" class="hidden file-input" accept="image/*">
                 </div>
             </div>
         </div>
 
-        <!-- Swap Button -->
         <div class="mt-8 flex justify-center">
             <button id="swap-btn" onclick="startSwap()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-10 rounded-full shadow-lg transform hover:scale-105 transition-all text-lg flex items-center">
                 <i class="fas fa-magic mr-2"></i> Swap Face Now
             </button>
         </div>
 
-        <!-- Loading / Result State -->
         <div id="loading-section" class="mt-8 hidden flex flex-col items-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div>
-            <p class="text-purple-400 animate-pulse">AI is swapping the face... Please wait.</p>
-        </div>
+            </div>
 
     </main>
 
     <script>
-        // 🟢 YOUR NGROK URL IS PLACED HERE:
-        const BACKEND_URL = "https://44af-34-182-77-151.ngrok-free.app";
+        // PERMANENT HUGGING FACE URL - No more Ngrok updates needed!
+        const BACKEND_URL = "https://chadharsahib-face-swap-api.hf.space";
 
         const sourceInput = document.getElementById('source-file');
-        const targetInput = document.querySelectorAll('input[type="file"]')[1];
+        const targetInput = document.getElementById('target-file');
 
-        // Make file upload boxes clickable & show file name when selected
-        document.querySelectorAll('.border-dashed').forEach((box, index) => {
-            const input = box.querySelector('input');
-            const textSpan = box.querySelector('span');
+        // Robust event listeners
+        document.querySelectorAll('.uploader-box').forEach((box) => {
+            const input = box.querySelector('.file-input');
+            const textSpan = box.querySelector('.file-label');
             
             box.addEventListener('click', () => input.click());
             
@@ -91,7 +82,6 @@
             });
         });
 
-        // The Real Swapping Process
         async function startSwap() {
             if (!sourceInput.files[0] || !targetInput.files[0]) {
                 alert("Please upload both a Source Image and a Target Face!");
@@ -101,33 +91,30 @@
             const btn = document.getElementById('swap-btn');
             const loading = document.getElementById('loading-section');
             
-            // Show loading state
             btn.classList.add('hidden');
             loading.classList.remove('hidden');
-            loading.innerHTML = `<div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div><p class="text-purple-400 animate-pulse">AI is swapping the face... Please wait.</p>`;
+            // Updated text to reflect CPU processing time
+            loading.innerHTML = `<div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500 mb-4"></div><p class="text-purple-400 animate-pulse">AI is mapping facial nodes (This takes ~10 seconds on free tier)...</p>`;
 
-            // Prepare files to send to your Google Colab Backend
             const formData = new FormData();
             formData.append("source_media", sourceInput.files[0]);
             formData.append("target_image", targetInput.files[0]);
 
             try {
-                // Send to Python Backend
+                // Fetch call cleanly routes to Hugging Face without Ngrok headers
                 const response = await fetch(`${BACKEND_URL}/swap/`, {
                     method: 'POST',
-                    headers: {
-                        "ngrok-skip-browser-warning": "true" // 🟢 Bypasses Ngrok's free tier warning page
-                    },
                     body: formData
                 });
 
-                if (!response.ok) throw new Error("Swap failed. Make sure both images have clear faces.");
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Server failed to process images.");
+                }
 
-                // Get result image back
                 const imageBlob = await response.blob();
                 const imageUrl = URL.createObjectURL(imageBlob);
 
-                // Show result on screen
                 loading.innerHTML = `
                     <div class="text-green-400 text-xl font-bold mb-4"><i class="fas fa-check-circle"></i> Swap Complete!</div>
                     <img src="${imageUrl}" class="rounded-xl max-w-full h-64 object-cover mb-4 shadow-lg border border-gray-600" />
@@ -135,8 +122,11 @@
                     <button onclick="location.reload()" class="mt-4 text-gray-400 underline hover:text-white">Do another swap</button>
                 `;
             } catch (error) {
-                loading.innerHTML = `<div class="text-red-500 text-xl font-bold mb-4"><i class="fas fa-times-circle"></i> Error: ${error.message}</div>
-                <button onclick="location.reload()" class="mt-4 text-gray-400 underline hover:text-white">Try Again</button>`;
+                loading.innerHTML = `
+                    <div class="text-red-500 text-xl font-bold mb-4"><i class="fas fa-exclamation-triangle"></i> Error Processing Swap</div>
+                    <p class="text-gray-300 mb-4">${error.message}</p>
+                    <button onclick="location.reload()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-full transition-all">Try Again</button>
+                `;
             }
         }
     </script>
