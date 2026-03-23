@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+# This silences the GitHub Node.js warning
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy-huggingface:
     runs-on: ubuntu-latest
@@ -12,7 +16,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # CRITICAL: Fetches full history so the push doesn't fail
+          fetch-depth: 0 
 
       - name: Push to Hugging Face
         env:
