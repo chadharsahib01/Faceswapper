@@ -14,7 +14,6 @@ from rembg import remove
 API_KEY = "ishark_secret_key_2026" 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
-# FIX: Route logs directly to Hugging Face standard output so we can see errors in real-time
 logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)], format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -51,25 +50,27 @@ def color_transfer(source, target):
         (l_mean_src, l_std_src, a_mean_src, a_std_src, b_mean_src, b_std_src) = cv2.meanStdDev(source_lab)
         (l_mean_tar, l_std_tar, a_mean_tar, a_std_tar, b_mean_tar, b_std_tar) = cv2.meanStdDev(target_lab)
         
-        # FIX: Prevent division by zero crashes
-        l_std_src = max(l_std_src[0][0], 1e-5)
-        a_std_src = max(a_std_src[0][0], 1e-5)
-        b_std_src = max(b_std_src[0][0], 1e-5)
+        # FIX: Safe value extraction to prevent array shape math crashes
+        l_std_src_val = max(l_std_src.item(), 1e-5)
+        a_std_src_val = max(a_std_src.item(), 1e-5)
+        b_std_src_val = max(b_std_src.item(), 1e-5)
 
-        source_lab[:,:,0] = ((source_lab[:,:,0] - l_mean_src[0][0]) * (l_std_tar[0][0] / l_std_src)) + l_mean_tar[0][0]
-        source_lab[:,:,1] = ((source_lab[:,:,1] - a_mean_src[0][0]) * (a_std_tar[0][0] / a_std_src)) + a_mean_tar[0][0]
-        source_lab[:,:,2] = ((source_lab[:,:,2] - b_mean_src[0][0]) * (b_std_tar[0][0] / b_std_src)) + b_mean_tar[0][0]
+        source_lab[:,:,0] = ((source_lab[:,:,0] - l_mean_src.item()) * (l_std_tar.item() / l_std_src_val)) + l_mean_tar.item()
+        source_lab[:,:,1] = ((source_lab[:,:,1] - a_mean_src.item()) * (a_std_tar.item() / a_std_src_val)) + a_mean_tar.item()
+        source_lab[:,:,2] = ((source_lab[:,:,2] - b_mean_src.item()) * (b_std_tar.item() / b_std_src_val)) + b_mean_tar.item()
+        
         source_lab = np.clip(source_lab, 0, 255).astype("uint8")
         return cv2.cvtColor(source_lab, cv2.COLOR_LAB2BGR)
     except Exception as e:
-        logger.error(f"Color transfer failed, using original: {e}")
-        return target
+        logger.error(f"Color transfer skipped: {e}")
+        # FIX: Must return SOURCE (the new face), not the target!
+        return source
 
-# FIX: Add conditional encoding. If background is removed, it MUST encode as PNG.
-def img_to_b64(img, is_png=False):
-    ext = '.png' if is_png else '.jpg'
+def img_to_b64(img):
+    # FIX: Dynamically check if image has transparency (4 channels) to save as PNG
+    ext = '.png' if img.shape[-1] == 4 else '.jpg'
     _, buffer = cv2.imencode(ext, img)
-    return base64.b64encode(buffer).decode('utf-8')
+    return base64.b64encode(buffer).decode('utf-8'), ext
 
 @app.post("/detect/")
 @limiter.limit("10/minute")
@@ -79,7 +80,7 @@ async def detect_faces(request: Request, source_image: UploadFile = File(...), a
     try:
         with open(src_path, "wb") as f: shutil.copyfileobj(source_image.file, f)
         img = cv2.imread(src_path)
-        if img is None: raise HTTPException(status_code=400, detail="Corrupted image file.")
+        if img is None: raise HTTPException(status_code=400, detail="Corrupted image.")
         
         faces = analyzer.get(img)
         if not faces: raise HTTPException(status_code=400, detail="No faces detected.")
@@ -89,7 +90,8 @@ async def detect_faces(request: Request, source_image: UploadFile = File(...), a
             box = face.bbox.astype(int)
             x1, y1, x2, y2 = max(0, box[0]), max(0, box[1]), min(img.shape[1], box[2]), min(img.shape[0], box[3])
             cropped = img[y1:y2, x1:x2]
-            face_data.append({"index": idx, "thumbnail": f"data:image/jpeg;base64,{img_to_b64(cropped)}"})
+            b64_str, _ = img_to_b64(cropped)
+            face_data.append({"index": idx, "thumbnail": f"data:image/jpeg;base64,{b64_str}"})
             
         cleanup_files([src_path])
         return JSONResponse(content={"faces": face_data})
@@ -105,22 +107,22 @@ async def swap_face(
     source_image: UploadFile = File(...), 
     target_image: UploadFile = File(...),
     face_index: int = Form(...),
-    remove_bg: bool = Form(False),
+    remove_bg: str = Form("false"), # FIX: Accept as string to prevent parsing errors
     api_key: str = Depends(verify_api_key)
 ):
     logger.info(f"Swap requested. IP: {request.client.host}")
     req_id = str(uuid.uuid4())
     src_path, tgt_path = f"src_{req_id}.jpg", f"tgt_{req_id}.jpg"
+    remove_bg_bool = remove_bg.lower() == "true"
     
     try:
         with open(src_path, "wb") as f: shutil.copyfileobj(source_image.file, f)
         with open(tgt_path, "wb") as f: shutil.copyfileobj(target_image.file, f)
         
         target_img, scene_img = cv2.imread(tgt_path), cv2.imread(src_path)
-        if target_img is None or scene_img is None: raise HTTPException(status_code=400, detail="Corrupted image file.")
+        if target_img is None or scene_img is None: raise HTTPException(status_code=400, detail="Corrupted image.")
         
         target_faces, scene_faces = analyzer.get(target_img), analyzer.get(scene_img)
-        
         if not target_faces: raise HTTPException(status_code=400, detail="No face in target image.")
         if face_index >= len(scene_faces): raise HTTPException(status_code=400, detail="Invalid face selection.")
             
@@ -136,8 +138,7 @@ async def swap_face(
         try:
             result_img = sr.upsample(result_img)
         except Exception as e:
-            logger.error(f"SuperRes failed (Likely OOM): {e}")
-            # Failsafe: Continue without upscaling instead of crashing
+            logger.error(f"SuperRes bypassed (Likely memory limit): {e}")
         
         # Deep Zoom Crop
         new_faces = analyzer.get(result_img)
@@ -146,25 +147,29 @@ async def swap_face(
             box = new_faces[0].bbox.astype(int)
             x1, y1, x2, y2 = max(0, box[0]), max(0, box[1]), min(result_img.shape[1], box[2]), min(result_img.shape[0], box[3])
             deep_zoom = result_img[y1:y2, x1:x2]
-            deep_zoom_b64 = img_to_b64(deep_zoom, is_png=False)
+            deep_zoom_b64, _ = img_to_b64(deep_zoom)
 
-        # Background Removal
-        if remove_bg:
-            result_img = remove(result_img) # Returns RGBA
+        # FIX: Bulletproof Background Removal using Byte Streams
+        if remove_bg_bool:
+            logger.info("Executing Background Removal...")
+            _, buffer = cv2.imencode('.png', result_img)
+            bg_removed_bytes = remove(buffer.tobytes())
+            nparr = np.frombuffer(bg_removed_bytes, np.uint8)
+            result_img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED) # Returns RGBA image safely
 
-        # FIX: Encode as PNG if background was removed
-        main_b64 = img_to_b64(result_img, is_png=remove_bg)
+        main_b64, ext = img_to_b64(result_img)
+        mime_type = "image/png" if ext == '.png' else "image/jpeg"
         
         background_tasks.add_task(cleanup_files, [src_path, tgt_path])
         return JSONResponse(content={
-            "main_image": f"data:image/{'png' if remove_bg else 'jpeg'};base64,{main_b64}",
+            "main_image": f"data:{mime_type};base64,{main_b64}",
             "deep_zoom": f"data:image/jpeg;base64,{deep_zoom_b64}" if deep_zoom_b64 else None
         })
         
     except Exception as e:
         logger.error(f"Swap Failed: {str(e)}")
         cleanup_files([src_path, tgt_path])
-        raise HTTPException(status_code=500, detail="Backend processing error. See logs.")
+        raise HTTPException(status_code=500, detail="Processing error.")
 
 @app.get("/health")
 def root(): return {"status": "Enterprise API Running.", "uptime": "OK"}
