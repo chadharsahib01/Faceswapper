@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+opencv-python-headless
+insightface
+onnxruntime
+slowapi
+numpy
+rembg
