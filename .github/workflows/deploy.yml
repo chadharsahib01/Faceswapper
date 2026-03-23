@@ -1,4 +1,3 @@
-https://github.com/chadharsahib01/Faceswapper/new/main
 name: Deploy to Vercel & Hugging Face
 
 on:
@@ -10,10 +9,14 @@ jobs:
   deploy-huggingface:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # CRITICAL: Fetches full history so the push doesn't fail
+
       - name: Push to Hugging Face
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }} # Add your HF token to GitHub Secrets
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add hf https://user:$HF_TOKEN@huggingface.co/spaces/chadharsahib/face-swap-api
+          git remote add hf https://chadharsahib:$HF_TOKEN@huggingface.co/spaces/chadharsahib/face-swap-api
           git push -f hf main
