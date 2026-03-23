@@ -286,17 +286,29 @@
             try {
                 const res = await fetch(finalImageB64);
                 const blob = await res.blob();
-                await navigator.clipboard.write([new ClipboardItem({[blob.type]: blob})]);
-                showToast("Copied to clipboard!", "success");
-            } catch(e) { showToast("Clipboard copy failed.", "error"); }
-        }
-
-        function showToast(msg, type='success') {
-            Toastify({ text: msg, duration: 3000, style: { background: type === 'error' ? "#ef4444" : "#10b981", borderRadius: "8px" } }).showToast();
-        }
-
-        function submitFeedback(isPositive) {
-            showToast(isPositive ? "Glad you loved it!" : "We'll improve the matrix.", isPositive ? 'success' : 'error');
+                
+                // Chrome strictly requires PNGs for clipboard. We must convert it if it's a JPEG.
+                if (blob.type === 'image/jpeg') {
+                    const img = new Image();
+                    img.src = finalImageB64;
+                    await new Promise(resolve => img.onload = resolve);
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    
+                    canvas.toBlob(async (pngBlob) => {
+                        await navigator.clipboard.write([new ClipboardItem({'image/png': pngBlob})]);
+                        showToast("Copied to clipboard!", "success");
+                    }, 'image/png');
+                } else {
+                    await navigator.clipboard.write([new ClipboardItem({[blob.type]: blob})]);
+                    showToast("Copied to clipboard!", "success");
+                }
+            } catch(e) { 
+                showToast("Clipboard copy failed. Try downloading instead.", "error"); 
+            }
         }
 
         // Check Uptime (Ping Health Route)
